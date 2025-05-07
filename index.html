@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Markdown ↔︎ AI Text Converter</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <!-- Marked.js for Markdown → HTML -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- DOMPurify for XSS‑safe HTML -->
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+  <style>
+    :root {
+      --bg: #f5f7fa;
+      --card: #ffffff;
+      --text: #1f2937;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --border: #d1d5db;
+      --code-bg: #f3f4f6;
+    }
+    * { box-sizing: border-box; margin:0; padding:0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    header { padding:1.5rem 2rem; font-size:1.75rem; font-weight:700; text-align:center; }
+    main { flex:1; width:100%; max-width:1200px; margin:0 auto; padding:0 2rem 2rem;
+      display:grid; gap:2rem; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:1rem;
+      box-shadow:0 4px 12px rgba(0,0,0,0.06); padding:1.75rem 1.5rem 1.5rem;
+      position:relative; display:flex; flex-direction:column; }
+    textarea { width:100%; flex:1; resize:vertical; min-height:220px; border:1px solid var(--border);
+      border-radius:0.5rem; padding:0.85rem 1rem; font-family:'Inter', monospace; font-size:1rem;
+      background:var(--bg); color:inherit; transition:border-color 0.2s ease; }
+    textarea:focus{ outline:none; border-color:var(--accent); }
+    .btn-group{ margin-top:0.85rem; display:flex; gap:0.65rem; flex-wrap:wrap; }
+    button{ all:unset; cursor:pointer; padding:0.6rem 1.15rem; font-weight:600; border-radius:0.55rem;
+      background:var(--accent); color:#fff; text-align:center;
+      transition:background 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease; }
+    button:hover{ background:var(--accent-hover); transform:translateY(-2px); box-shadow:0 6px 14px rgba(0,0,0,0.1); }
+    button:active{ transform:translateY(0); box-shadow:none; }
+    button.secondary{ background:transparent; color:var(--accent); border:2px solid var(--accent); }
+    .tabs{ display:flex; border-bottom:1px solid var(--border); margin-bottom:1.25rem; gap:0.25rem; flex-wrap:wrap; }
+    .tab{ padding:0.65rem 1rem; cursor:pointer; font-weight:600; border-bottom:3px solid transparent;
+      border-radius:0.5rem 0.5rem 0 0; transition:background 0.2s ease, border-color 0.2s ease; }
+    .tab:hover{ background:rgba(59,130,246,0.1); }
+    .tab.active{ border-color:var(--accent); background:rgba(59,130,246,0.15); }
+    .output-section{ flex:1; overflow:auto; position:relative; animation:fadeIn 0.35s ease-out; }
+    .rich-content{ font-size:1rem; line-height:1.6; }
+    .rich-content h1{ font-size:2rem; margin:1em 0 0.5em; }
+    .rich-content h2{ font-size:1.5rem; margin:1em 0 0.5em; }
+    .rich-content h3{ font-size:1.25rem; margin:1em 0 0.5em; }
+    .rich-content p{ margin:0 0 0.8em; }
+    .rich-content ul, .rich-content ol{ margin:0 0 0.8em 1.25rem; }
+    .rich-content ul{ list-style:disc; }
+    .rich-content ol{ list-style:decimal; }
+    .rich-content li{ margin:0.25em 0; }
+    .rich-content blockquote{ border-left:4px solid var(--accent); padding:0.5rem 1rem;
+      background:rgba(59,130,246,0.05); margin:0 0 0.8em; }
+    .rich-content pre{ background:var(--code-bg); padding:1rem; border-radius:0.5rem;
+      overflow:auto; margin:0 0 0.8em; font-family:'Inter', monospace; font-size:0.95rem; }
+    .rich-content code{ background:var(--code-bg); padding:0.2em 0.4em; border-radius:0.3em; }
+    .rich-content hr{ border:none; border-top:1px solid var(--border); margin:1.5rem 0; }
+    .rich-content table{ width:100%; border-collapse:collapse; margin:0 0 1em; }
+    .rich-content th, .rich-content td{ border:1px solid var(--border); padding:0.4rem 0.6rem; text-align:left; }
+    .rich-content th{ background:rgba(0,0,0,0.04); }
+    .action-btn{ position:absolute; top:1rem; z-index:10; }
+    .copy-btn{ right:1rem; }
+    .strip-btn{ right:7.5rem; }
+    .copy-btn.copied::after,
+    .strip-btn.done::after{ content:attr(data-toast); position:absolute; right:110%; top:50%;
+      transform:translateY(-50%); background:var(--accent); color:#fff; padding:0.25rem 0.5rem;
+      border-radius:0.35rem; font-size:0.75rem; white-space:nowrap; opacity:0;
+      animation:fadeTooltip 1.2s forwards; }
+    @keyframes fadeTooltip{ 10%{opacity:1;} 90%{opacity:1;} 100%{opacity:0;} }
+    @keyframes fadeIn{ from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);} }
+  </style>
+</head>
+<body>
+  <header>AI Markdown Converter</header>
+  <main>
+    <section class="card" id="inputCard">
+      <h2 style="margin-bottom:0.85rem">Markdown Input</h2>
+      <textarea id="markdownInput" placeholder="Paste or write markdown here..."></textarea>
+      <div class="btn-group">
+        <button id="pasteBtn" class="secondary">Paste</button>
+        <button id="clearBtn" class="secondary">Clear</button>
+        <button id="convertBtn">Convert</button>
+      </div>
+    </section>
+    <section class="card" id="outputCard">
+      <h2 style="margin-bottom:1rem">Output</h2>
+      <div class="tabs">
+        <div class="tab active" data-target="rich">Rich&nbsp;Text</div>
+        <div class="tab" data-target="plain">Plain&nbsp;Text</div>
+        <div class="tab" data-target="json">JSON</div>
+      </div>
+      <button id="stripBtn" class="action-btn strip-btn secondary" data-toast="NNBSP removed">Strip NNBSP</button>
+      <button id="copyBtn" class="action-btn copy-btn secondary" data-toast="Copied!">Copy</button>
+      <div class="output-section rich-content" id="richOutput" data-type="rich"></div>
+      <textarea class="output-section" id="plainOutput" data-type="plain" style="display:none"></textarea>
+      <textarea class="output-section" id="jsonOutput" data-type="json" style="display:none"></textarea>
+    </section>
+  </main>
+  <script>
+    marked.setOptions({ breaks:true, gfm:true });
+    const markdownInput = document.getElementById('markdownInput');
+    const pasteBtn      = document.getElementById('pasteBtn');
+    const clearBtn      = document.getElementById('clearBtn');
+    const convertBtn    = document.getElementById('convertBtn');
+    const copyBtn       = document.getElementById('copyBtn');
+    const stripBtn      = document.getElementById('stripBtn');
+    const tabs          = document.querySelectorAll('.tab');
+    const richOutput    = document.getElementById('richOutput');
+    const plainOutput   = document.getElementById('plainOutput');
+    const jsonOutput    = document.getElementById('jsonOutput');
+    pasteBtn.addEventListener('click', async () => {
+      try { const text = await navigator.clipboard.readText(); markdownInput.value += text; animate(pasteBtn); }
+      catch { alert('Clipboard access denied'); }
+    });
+    clearBtn.addEventListener('click', () => { markdownInput.value = ''; animate(clearBtn); convert(); });
+    function convert() {
+      const md = markdownInput.value || '';
+      const rawHTML = marked.parse(md);
+      const safeHTML = DOMPurify.sanitize(rawHTML);
+      richOutput.innerHTML = safeHTML;
+      plainOutput.value = richOutput.textContent.trim();
+      jsonOutput.value = JSON.stringify({ markdown: md, html: rawHTML, plain: plainOutput.value }, null, 2);
+      animate(convertBtn);
+    }
+    convertBtn.addEventListener('click', convert);
+    markdownInput.addEventListener('input', convert);
+    copyBtn.addEventListener('click', async () => {
+      const current = document.querySelector('.output-section:not([style*="display: none"])');
+      const value = current.tagName === 'DIV' ? current.innerHTML : current.value;
+      try { await navigator.clipboard.writeText(value); copyBtn.classList.add('copied'); setTimeout(()=>copyBtn.classList.remove('copied'),1200); animate(copyBtn); }
+      catch { alert('Copy failed'); }
+    });
+    stripBtn.addEventListener('click', () => {
+      const current = document.querySelector('.output-section:not([style*="display: none"])');
+      if(current.tagName === 'DIV') current.innerHTML = current.innerHTML.replace(/\u202F/g, '');
+      else current.value = current.value.replace(/\u202F/g, '');
+      stripBtn.classList.add('done'); setTimeout(()=>stripBtn.classList.remove('done'),1200); animate(stripBtn);
+    });
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelector('.tab.active').classList.remove('active');
+        tab.classList.add('active');
+        const target = tab.dataset.target;
+        [richOutput, plainOutput, jsonOutput].forEach(el => {
+          el.style.display = el.dataset.type === target ? 'block' : 'none';
+        });
+        animateTabSwitch();
+      });
+    });
+    function animate(el) {
+      el.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.08)' }, { transform: 'scale(1)' }], { duration: 180, easing: 'ease-out' });
+    }
+    function animateTabSwitch() {
+      const el = document.querySelector('.output-section:not([style*="display: none"])');
+      el.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 250, easing: 'ease-out' });
+    }
+    // Initialize
+    markdownInput.value = `# Welcome!\n\n* Type or paste markdown here.\n* Click \`Convert\` or start typing to update.\n* Use tabs to view Rich, Plain, or JSON outputs.`;
+    convert();
+  </script>
+</body>
+</html>
